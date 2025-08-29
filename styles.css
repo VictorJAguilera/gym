@@ -74,7 +74,7 @@ body{
 .card h3{margin:0 0 6px; font-size:16px}
 .card p{margin:0; color:var(--muted); font-size:12px; line-height:1.35}
 
-.kbd{font-size:11px; border:1px solid var(--border); padding:2px 6px; border-radius:8px; background:#101011; color:var(--muted)}
+.kbd{font-size:11px; border:1px solid var(--border); padding:2px 6px; border-radius:8px; background:#101011; color:#muted}
 
 .empty{
   text-align:center; padding:48px 12px;
@@ -166,3 +166,26 @@ body{
 .tag .dot{width:8px; height:8px; border-radius:50%; background:var(--accent)}
 
 .hr{height:1px; background:var(--border); margin:10px 0}
+
+/* --- Workout view --- */
+.workout-header{position:sticky;top:0;z-index:6;background:linear-gradient(180deg, rgba(11,11,12,0.95), rgba(11,11,12,0.75) 60%, transparent);backdrop-filter: blur(6px);margin:-16px -16px 12px;padding:14px 16px 8px;border-bottom:1px solid var(--border)}
+.workout-title{display:flex;align-items:center;gap:10px;font-weight:800}
+.workout-sub{font-size:12px;color:var(--muted)}
+
+.toggle{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;border:1px solid var(--border);cursor:pointer;background:#17181a;user-select:none}
+.toggle .dot{width:16px;height:16px;border-radius:50%;background:#3a3a40;border:1px solid #2a2a30}
+.toggle.complete{background:rgba(46, 204, 113, .15);border-color:#2ecc71}
+.toggle.complete .dot{background:#2ecc71;border-color:#26b964}
+.toggle .label{font-size:12px;color:#cfd3da}
+.toggle.complete .label{color:#e9ffe7}
+
+.workout-nav{display:flex;justify-content:space-between;align-items:center;margin:6px 0 12px}
+.workout-nav .icon-btn{padding:10px}
+.workout-progress{font-size:12px;color:var(--muted)}
+
+.finish-card{text-align:center;padding:24px;border:1px dashed var(--border);border-radius:var(--radius);background:linear-gradient(180deg,#121214,#0d0d10)}
+.finish-card .btn{margin-top:8px}
+
+.card .btn.icon{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;padding:0}
+.card .btn.icon.secondary{background:#202024;border:1px solid var(--border)}
+.card .btn.icon svg{fill:#fff}

@@ -5,7 +5,7 @@
    - Persistencia: localStorage
    ======================= */
 
-const STORAGE_KEY = "gymbuddy_state_v1";
+const STORAGE_KEY = "gymbuddy_state_v2";
 
 // --- Estado y persistencia ---
 const Store = {
@@ -20,6 +20,7 @@ const Store = {
     if (!this.state) {
       this.state = {
         routines: [],
+        workouts: [],
         library: EXERCISES_SEED,  // desde data.js
         customExercises: [],
         lastOpenedRoutineId: null
@@ -120,10 +121,21 @@ const Store = {
     }else{
       return this.state.customExercises.find(e=>e.id===ref.id);
     }
+  },
+
+  saveWorkout(session){
+    this.state.workouts.unshift(session);
+    this.save();
   }
 };
 
 // --- Render de vistas ---
+function showFAB(show){
+  const fab = document.getElementById("fab-add");
+  if(!fab) return;
+  fab.style.display = show ? "grid" : "none";
+}
+
 const appEl = document.getElementById("app");
 const modalRoot = document.getElementById("modal-root");
 const modalTitle = document.getElementById("modal-title");
@@ -138,6 +150,7 @@ function fmtDate(ts){
 }
 
 function render(){
+  showFAB(true);
   const s = Store.state;
   appEl.innerHTML = `
     <header class="header">
@@ -168,15 +181,18 @@ function render(){
   // eventos
   const cta = document.getElementById("cta-new");
   if(cta) cta.addEventListener("click", openCreateRoutine);
-  document.querySelectorAll("[data-open-routine]").forEach(el=>{
-    el.addEventListener("click", ()=> openRoutine(el.getAttribute("data-open-routine")));
+  document.querySelectorAll("[data-edit]").forEach(el=>{
+    el.addEventListener("click", ()=> openRoutine(el.getAttribute("data-edit")));
+  });
+  document.querySelectorAll("[data-play]").forEach(el=>{
+    el.addEventListener("click", ()=> startWorkout(el.getAttribute("data-play")));
   });
 }
 
 function RoutineCard(r){
   const totalSets = r.exercises.reduce((acc,e)=>acc+e.sets.length,0);
   return `
-  <article class="card" role="button" data-open-routine="${r.id}">
+  <article class="card">
     <div class="card-row">
       <div style="width:48px;height:48px;border-radius:14px;background:#101012;display:grid;place-items:center;border:1px solid var(--border)">
         <span class="kbd">${r.exercises.length || 0}</span>
@@ -185,15 +201,25 @@ function RoutineCard(r){
         <h3>${escapeHtml(r.name)}</h3>
         <p>${totalSets} series registradas • actualizado ${fmtDate(r.updatedAt)}</p>
       </div>
-      <button class="icon-btn" aria-label="Abrir">
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M9 6l6 6-6 6"/></svg>
-      </button>
+      <div class="row" style="gap:8px">
+        <button class="btn icon secondary" aria-label="Editar rutina" data-edit="${r.id}">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0-6a2 2 0 0 1 2 2v1.07a8 8 0 0 1 4.93 4.93H20a2 2 0 1 1 0 4h-1.07a8 8 0 0 1-4.93 4.93V20a2 2 0 1 1-4 0v-1.07A8 8 0 0 1 5.07 13H4a2 2 0 1 1 0-4h1.07A8 8 0 0 1 10 4.07V3a2 2 0 0 1 2-2z"/>
+          </svg>
+        </button>
+        <button class="btn icon" aria-label="Empezar entrenamiento" data-play="${r.id}">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+        </button>
+      </div>
     </div>
   </article>
   `;
 }
 
 function openCreateRoutine(){
+  showFAB(false);
   showModal("Nueva rutina", `
     <div class="row" style="gap:10px">
       <input id="rut-name" class="input" placeholder="Nombre de la rutina (p.ej. 'Full body A')" />
@@ -215,6 +241,7 @@ function openCreateRoutine(){
 }
 
 function openRoutine(id){
+  showFAB(false);
   const r = Store.state.routines.find(x=>x.id===id);
   if(!r) return render();
 
@@ -441,6 +468,136 @@ function openCreateExerciseForm(onSaved){
     });
     document.getElementById("cancel-custom-ex").addEventListener("click", closeModal);
   });
+}
+
+// --- Workout Session (sin backend) ---
+function startWorkout(routineId){
+  showFAB(false);
+  const r = Store.state.routines.find(x=>x.id===routineId);
+  if(!r || r.exercises.length===0){
+    // si no hay ejercicios, lleva a editar
+    openRoutine(routineId); return;
+  }
+  const session = {
+    id: Store.uid("ws"),
+    routineId: r.id,
+    startedAt: Date.now(),
+    finishedAt: null,
+    currentIndex: 0,
+    items: r.exercises.map(x=>{
+      const ex = Store.getExerciseByRef(x.exerciseRef);
+      return {
+        rexId: x.id,
+        exerciseRef: x.exerciseRef,
+        name: ex?.name || "Ejercicio",
+        image: ex?.image || "",
+        bodyPart: ex?.bodyPart || "",
+        sets: x.sets.map(s=>({ id: s.id, reps: s.reps, peso: s.peso, done:false }))
+      };
+    })
+  };
+
+  renderWorkout(session);
+}
+
+function renderWorkout(session){
+  const total = session.items.length;
+  const idx = session.currentIndex;
+  const item = session.items[idx];
+
+  appEl.innerHTML = `
+    <header class="workout-header">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <div class="row" style="gap:8px;align-items:center">
+          <button class="icon-btn" id="wo-back">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <div>
+            <div class="workout-title">Entrenamiento</div>
+            <div class="workout-sub">${idx+1} de ${total} • ${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+          </div>
+        </div>
+        <div class="workout-progress">${Math.round(100*(completedSetsCount(session))/maxSetsCount(session))}%</div>
+      </div>
+    </header>
+
+    <div class="workout-nav">
+      <div>
+        ${idx>0 ? `<button class="icon-btn" id="wo-prev" aria-label="Anterior">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15 19l-7-7 7-7"/></svg>
+        </button>` : ""}
+      </div>
+      <div>
+        ${idx<total-1 ? `<button class="icon-btn" id="wo-next" aria-label="Siguiente">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M9 5l7 7-7 7"/></svg>
+        </button>` : ""}
+      </div>
+    </div>
+
+    <section class="grid">
+      <article class="card">
+        <div class="exercise-card">
+          ${item.image ? `<img class="thumb" src="${item.image}" alt="${escapeHtml(item.name)}">` : `<div class="thumb" style="width:56px;height:56px;background:#0d0d10;border-radius:16px;border:1px solid var(--border);display:grid;place-items:center">🏋️</div>`}
+          <div class="info">
+            <h3>${escapeHtml(item.name)}</h3>
+            <p>${item.bodyPart}</p>
+          </div>
+        </div>
+        <div class="sets">
+          ${item.sets.map((s, i)=>`
+            <div class="set">
+              <div class="toggle ${s.done ? "complete":""}" data-toggle="${s.id}">
+                <span class="dot"></span><span class="label">${s.done ? "Completada" : "Incompleta"}</span>
+              </div>
+              <input inputmode="numeric" type="number" min="0" placeholder="Reps" value="${s.reps}" data-reps="${s.id}">
+              <input inputmode="decimal" type="number" step="0.5" min="0" placeholder="Peso (kg)" value="${s.peso}" data-peso="${s.id}">
+            </div>
+          `).join("")}
+        </div>
+      </article>
+
+      ${idx===total-1 ? `
+        <div class="finish-card card">
+          <p><strong>Último ejercicio listo.</strong></p>
+          <p class="small">Pulsa para guardar tus registros de hoy.</p>
+          <button class="btn" id="wo-finish">Finalizar entrenamiento</button>
+        </div>
+      `: ""}
+    </section>
+  `;
+
+  // listeners
+  document.getElementById("wo-back").addEventListener("click", ()=>{ openRoutine(session.routineId); });
+  if(document.getElementById("wo-prev")) document.getElementById("wo-prev").addEventListener("click", ()=>{ session.currentIndex=Math.max(0, session.currentIndex-1); renderWorkout(session); });
+  if(document.getElementById("wo-next")) document.getElementById("wo-next").addEventListener("click", ()=>{ session.currentIndex=Math.min(session.items.length-1, session.currentIndex+1); renderWorkout(session); });
+
+  // toggle + inputs
+  item.sets.forEach(s=>{
+    const tog = document.querySelector(`[data-toggle="${s.id}"]`);
+    const reps = document.querySelector(`[data-reps="${s.id}"]`);
+    const peso = document.querySelector(`[data-peso="${s.id}"]`);
+    if(tog) tog.addEventListener("click", ()=>{
+      s.done = !s.done;
+      renderWorkout(session);
+    });
+    if(reps) reps.addEventListener("input", ev=>{ s.reps = parseInt(ev.target.value||"0",10); });
+    if(peso) peso.addEventListener("input", ev=>{ s.peso = parseFloat(ev.target.value||"0"); });
+  });
+
+  // finish
+  const fin = document.getElementById("wo-finish");
+  if(fin) fin.addEventListener("click", ()=>{
+    session.finishedAt = Date.now();
+    Store.saveWorkout(session);
+    openRoutine(session.routineId);
+  });
+}
+
+function completedSetsCount(session){
+  return session.items.reduce((acc,it)=> acc + it.sets.filter(s=>s.done).length, 0);
+}
+function maxSetsCount(session){
+  return session.items.reduce((acc,it)=> acc + it.sets.length, 0) || 1;
 }
 
 // --- Utilidades de UI ---
